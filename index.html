@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NetSuite Order Finder</title>
+  <script src="https://dl.frontapp.com/libs/frontjs.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --accent: #4f8ef7;
+      --accent-hover: #6ba3ff;
+      --text: #e8eaf0;
+      --text-muted: #7b8099;
+      --success: #34d399;
+      --tag-bg: #1e2a4a;
+      --tag-border: #2d4080;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 16px;
+      font-size: 13px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-icon {
+      width: 28px;
+      height: 28px;
+      background: var(--accent);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .header-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .header-sub {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Estado vacío */
+    .empty-state {
+      text-align: center;
+      padding: 32px 16px;
+      color: var(--text-muted);
+    }
+
+    .empty-state .icon {
+      font-size: 32px;
+      margin-bottom: 10px;
+      opacity: 0.4;
+    }
+
+    .empty-state p {
+      font-size: 11px;
+      line-height: 1.6;
+    }
+
+    /* Lista de órdenes detectadas */
+    .orders-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .order-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .order-card:hover {
+      border-color: var(--accent);
+    }
+
+    .order-card-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      gap: 10px;
+    }
+
+    .order-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .order-number {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.02em;
+    }
+
+    .order-context {
+      font-size: 10px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 160px;
+    }
+
+    .ns-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--tag-bg);
+      border: 1px solid var(--tag-border);
+      color: var(--accent);
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.15s;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    .ns-btn:hover {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(79,142,247,0.3);
+    }
+
+    .ns-btn svg {
+      width: 12px;
+      height: 12px;
+      flex-shrink: 0;
+    }
+
+    /* Context snippet */
+    .order-snippet {
+      padding: 6px 12px 10px;
+      border-top: 1px solid var(--border);
+      font-size: 10px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .order-snippet mark {
+      background: rgba(79,142,247,0.25);
+      color: var(--accent);
+      padding: 0 2px;
+      border-radius: 2px;
+      font-weight: 700;
+    }
+
+    /* Badge de cantidad */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 10px;
+      padding: 1px 7px;
+      font-size: 10px;
+      font-weight: 700;
+      margin-left: auto;
+    }
+
+    /* Scanning state */
+    .scanning {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .dot-pulse {
+      display: flex;
+      gap: 3px;
+    }
+
+    .dot-pulse span {
+      width: 4px;
+      height: 4px;
+      background: var(--accent);
+      border-radius: 50%;
+      animation: pulse 1.2s infinite;
+    }
+
+    .dot-pulse span:nth-child(2) { animation-delay: 0.2s; }
+    .dot-pulse span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1); }
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 12px 0;
+    }
+
+    .footer-note {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-align: center;
+      padding-top: 8px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-icon">🔗</div>
+    <div>
+      <div class="header-title">NetSuite Orders</div>
+      <div class="header-sub">Auto-detected from conversation</div>
+    </div>
+    <div id="badge" style="display:none" class="badge">0</div>
+  </div>
+
+  <div id="scanning" class="scanning">
+    <div class="dot-pulse">
+      <span></span><span></span><span></span>
+    </div>
+    Scanning conversation...
+  </div>
+
+  <div id="empty" class="empty-state" style="display:none">
+    <div class="icon">📦</div>
+    <p>No order numbers detected yet.<br/>They'll appear here automatically.</p>
+  </div>
+
+  <div id="orders-list" class="orders-list" style="display:none"></div>
+
+  <div class="divider"></div>
+  <div class="footer-note">Click any order to open it in NetSuite</div>
+
+  <script>
+    const NS_BASE = 'https://6860774.app.netsuite.com/app/common/search/searchresults.nl?searchtype=Transaction&searchid=2573&Transaction_POASTEXT=%23{ORDER}&Transaction_POASTEXTtype=STARTSWITH&style=NORMAL';
+
+    // Regex flexible para detectar números de orden
+    // Detecta: #40432 | Order #40432 | order 40432 | SO-40432 | 40432 (5+ dígitos solos)
+    const ORDER_REGEX = /(?:order\s*#?\s*|#|SO[-\s]?)(\d{4,6})|(?<!\d)(\d{5})(?!\d)/gi;
+
+    function buildNSUrl(orderNum) {
+      return NS_BASE.replace('{ORDER}', encodeURIComponent(orderNum));
+    }
+
+    function extractOrders(text) {
+      if (!text) return [];
+      const found = new Map();
+      let match;
+      const regex = /(?:order\s*#?\s*|#|SO[-\s]?)(\d{4,6})|(?<!\d)(\d{5})(?!\d)/gi;
+
+      while ((match = regex.exec(text)) !== null) {
+        const num = match[1] || match[2];
+        if (num && !found.has(num)) {
+          // Get context snippet (30 chars around the match)
+          const start = Math.max(0, match.index - 25);
+          const end = Math.min(text.length, match.index + match[0].length + 25);
+          const snippet = text.slice(start, end).trim();
+          found.set(num, { num, snippet, raw: match[0].trim() });
+        }
+      }
+      return Array.from(found.values());
+    }
+
+    function highlightSnippet(snippet, raw) {
+      const escaped = raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return snippet.replace(new RegExp(escaped, 'i'), `<mark>${raw}</mark>`);
+    }
+
+    function renderOrders(orders) {
+      const list = document.getElementById('orders-list');
+      const badge = document.getElementById('badge');
+      const empty = document.getElementById('empty');
+      const scanning = document.getElementById('scanning');
+
+      scanning.style.display = 'none';
+
+      if (orders.length === 0) {
+        list.style.display = 'none';
+        empty.style.display = 'block';
+        badge.style.display = 'none';
+        return;
+      }
+
+      empty.style.display = 'none';
+      list.style.display = 'flex';
+      badge.style.display = 'inline-flex';
+      badge.textContent = orders.length;
+
+      list.innerHTML = orders.map(({ num, snippet, raw }) => `
+        <div class="order-card">
+          <div class="order-card-inner">
+            <div class="order-info">
+              <div class="order-number">#${num}</div>
+              <div class="order-context">${raw}</div>
+            </div>
+            <a class="ns-btn" href="${buildNSUrl(num)}" target="_blank" rel="noopener">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9M10 2h4v4M14 2L8 8"/>
+              </svg>
+              Ver en NS
+            </a>
+          </div>
+          <div class="order-snippet">…${highlightSnippet(snippet, raw)}…</div>
+        </div>
+      `).join('');
+    }
+
+    // ── Front SDK Integration ──────────────────────────────────────────────
+
+    Front.on('conversation', function(data) {
+      const allText = [];
+
+      // Recopilar texto de todos los mensajes
+      if (data && data.messages) {
+        data.messages.forEach(function(msg) {
+          if (msg.body) allText.push(msg.body.replace(/<[^>]+>/g, ' ')); // strip HTML
+          if (msg.subject) allText.push(msg.subject);
+        });
+      }
+
+      // También revisar el subject
+      if (data && data.subject) allText.push(data.subject);
+
+      const combined = allText.join(' ');
+      const orders = extractOrders(combined);
+      renderOrders(orders);
+    });
+
+    // Iniciar mostrando scanning
+    // Si Front no dispara el evento en 3s, mostrar empty
+    setTimeout(function() {
+      const scanning = document.getElementById('scanning');
+      if (scanning.style.display !== 'none') {
+        scanning.style.display = 'none';
+        document.getElementById('empty').style.display = 'block';
+      }
+    }, 3000);
+
+  </script>
+</body>
+</html>
